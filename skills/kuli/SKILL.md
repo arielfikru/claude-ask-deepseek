@@ -37,6 +37,25 @@ Routing rules:
   (`-j 8`); codex is the easiest to rate-limit — keep it serial / `-j 2`, give
   it one heavy task done right rather than many parallel ones.
 
+## Coding: pick the lane
+
+Repo coding always goes **agentic** — the lane reads the repo itself, so you hand
+only the task + `-C dir`, never file contents (keeps big context off Opus).
+Default to the cheapest lane that clears the bar:
+
+1. **`ask-deepseek --agentic` — the default coding delegate.** Simple→medium repo
+   read/edit, cheapest agentic (Codex harness on OpenRouter). `--apply` to edit
+   (isolate in a worktree); read-only otherwise.
+2. **`ask-gemini-code`** — step up for high-volume / parallel / many-file work, a
+   cross-family diff review, or when the task needs vision. Wide fan-out (`-j 8`).
+3. **`ask-codex`** — heaviest precision / long-horizon; one task done right.
+   Serial (`-j 2`, easiest to rate-limit).
+
+deepseek **text** mode is NOT a coding lane — it is blind. Reach for it only for
+non-repo text: explain/summarize pasted code, draft boilerplate or tests from a
+`-f` file, bulk text transforms. Trivial inline edits: just do them yourself —
+the brief+review overhead outweighs them.
+
 ## Health check before delegating
 
 Each `ask-*` records its outcome to a health file. Before a non-trivial
