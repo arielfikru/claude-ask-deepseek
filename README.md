@@ -1,4 +1,4 @@
-# claude-use-deepseek
+# claude-ask-deepseek
 
 Give your AI coding agent (Claude Code) a cheap **intern**: it hands well-scoped
 grunt work to **DeepSeek V4** via [OpenRouter](https://openrouter.ai), then
@@ -18,7 +18,7 @@ mode) when a task needs real thought.
 Paste this to Claude Code (or any agent that can run shell + clone repos):
 
 ```
-Install ini https://github.com/arielfikru/claude-use-deepseek
+Install ini https://github.com/arielfikru/claude-ask-deepseek
 ```
 
 The agent reads [`INSTALL.md`](INSTALL.md) and sets itself up. That's it.
@@ -31,8 +31,8 @@ The agent reads [`INSTALL.md`](INSTALL.md) and sets itself up. That's it.
 > `mcp` package, and only if you want the [MCP server](#mcp-server-optional).
 
 ```bash
-git clone --depth 1 https://github.com/arielfikru/claude-use-deepseek.git
-bash claude-use-deepseek/install.sh
+git clone --depth 1 https://github.com/arielfikru/claude-ask-deepseek.git
+bash claude-ask-deepseek/install.sh
 export OPENROUTER_API_KEY="sk-or-..."   # see "Getting an API key" below
 ask-deepseek --flash "Reply with exactly: PONG"
 ```
@@ -236,7 +236,7 @@ pip install -r mcp/requirements.txt          # needs the `mcp` package
 # register in Claude Code (user scope), passing the key as env:
 claude mcp add deepseek --scope user \
   -e OPENROUTER_API_KEY="sk-or-..." \
-  -- python3 /abs/path/to/claude-use-deepseek/mcp/server.py
+  -- python3 /abs/path/to/claude-ask-deepseek/mcp/server.py
 ```
 
 Tools exposed: `ask_deepseek(prompt, model, reasoning, system, consistency,

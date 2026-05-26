@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installer for claude-use-deepseek.
+# Installer for claude-ask-deepseek.
 # Idempotent: copies the CLI + skill into ~/.claude, wires PATH, sets up the key.
 set -euo pipefail
 

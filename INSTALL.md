@@ -1,7 +1,7 @@
 # Agent install instructions
 
 > **You are an AI coding agent (e.g. Claude Code).** The user told you
-> "Install ini https://github.com/arielfikru/claude-use-deepseek". Do exactly
+> "Install ini https://github.com/arielfikru/claude-ask-deepseek". Do exactly
 > the steps below. They give you, the agent, a CLI to offload cheap subtasks to
 > DeepSeek V4 via OpenRouter while you stay the orchestrator.
 
@@ -11,7 +11,7 @@
 
    ```bash
    tmp="$(mktemp -d)"
-   git clone --depth 1 https://github.com/arielfikru/claude-use-deepseek.git "$tmp"
+   git clone --depth 1 https://github.com/arielfikru/claude-ask-deepseek.git "$tmp"
    bash "$tmp/install.sh"
    ```
 
