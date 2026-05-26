@@ -1,8 +1,12 @@
-"""kuli.deepseek — text/bulk intern. Calls DeepSeek V4 via OpenRouter.
+"""kuli.ask_or — generic OpenRouter intern. Any model, your choice.
 
-Backend: OpenRouter chat-completions HTTP API. Stdlib only.
-Env: OPENROUTER_API_KEY (required), DEEPSEEK_MODEL / DEEPSEEK_MAX_TOKENS /
-DEEPSEEK_TIMEOUT / DEEPSEEK_AUTO_THRESHOLD (optional).
+Same OpenRouter plumbing as the deepseek preset, but model-agnostic: you pick
+the slug (anthropic/claude-…, openai/gpt-…, google/gemini-…, x-ai/grok-…,
+qwen/…, meta-llama/…, etc). Model is REQUIRED — via -m or the OPENROUTER_MODEL
+env var; there is deliberately no silent default so you never spend on a model
+you didn't choose. Stdlib only.
+Env: OPENROUTER_API_KEY (required), OPENROUTER_MODEL (default model slug),
+OPENROUTER_MAX_TOKENS / OPENROUTER_TIMEOUT (optional).
 Exit codes: 0 ok, 1 usage/input error, 2 API error.
 """
 import argparse
@@ -10,56 +14,41 @@ import os
 
 from . import core, openrouter
 
-PROG = "ask-deepseek"
-MODEL_PRO = "deepseek/deepseek-v4-pro"
-MODEL_FLASH = "deepseek/deepseek-v4-flash"
-
+PROG = "ask-or"
 die = core.make_die(PROG)
 
 
 def parse_args():
-    p = argparse.ArgumentParser(prog=PROG, description="Call DeepSeek V4 via OpenRouter.")
+    p = argparse.ArgumentParser(prog=PROG,
+                                description="Call any OpenRouter model. Pick the model with -m.")
     p.add_argument("prompt", nargs="*", help="prompt text (else read stdin)")
+    p.add_argument("--model", "-m", help="OpenRouter model slug (or env OPENROUTER_MODEL)")
     p.add_argument("--file", "-f", help="prepend file contents to prompt")
     p.add_argument("--system", "-s", help="system prompt")
-    p.add_argument("--model", "-m", help="explicit OpenRouter model slug")
-    p.add_argument("--flash", action="store_true", help="use cheaper v4-flash")
-    p.add_argument("--auto", action="store_true",
-                   help="auto-pick flash (small input) vs pro (large), by token estimate")
     p.add_argument("--temperature", "-t", type=float, default=None)
     p.add_argument("--consistency", "-c", type=int, metavar="N",
-                   help="self-consistency: sample N, majority-vote the answer, flag disagreement")
+                   help="self-consistency: sample N, majority-vote, flag disagreement")
     p.add_argument("--max-tokens", type=int,
-                   default=int(os.environ.get("DEEPSEEK_MAX_TOKENS", "262144")),
-                   help="max OUTPUT tokens (env DEEPSEEK_MAX_TOKENS)")
+                   default=int(os.environ.get("OPENROUTER_MAX_TOKENS", "262144")),
+                   help="max OUTPUT tokens (env OPENROUTER_MAX_TOKENS)")
     p.add_argument("--reasoning", "-r", nargs="?", const="high", choices=["high", "xhigh"],
-                   help="enable thinking mode (effort high|xhigh; bare = high)")
+                   help="enable thinking mode if the model supports it (high|xhigh)")
     p.add_argument("--json", action="store_true", help="request JSON object output")
     p.add_argument("--show-thinking", action="store_true",
                    help="also print the reasoning process, not just the final answer")
     p.add_argument("--timeout", type=int,
-                   default=int(os.environ.get("DEEPSEEK_TIMEOUT", "600")),
-                   help="HTTP timeout seconds (env DEEPSEEK_TIMEOUT)")
+                   default=int(os.environ.get("OPENROUTER_TIMEOUT", "600")),
+                   help="HTTP timeout seconds (env OPENROUTER_TIMEOUT)")
     p.add_argument("--quiet", "-q", action="store_true", help="suppress usage stats on stderr")
     return p.parse_args()
 
 
-def auto_model(text, system):
-    threshold = int(os.environ.get("DEEPSEEK_AUTO_THRESHOLD", "1500"))
-    est_tokens = (len(text) + len(system or "")) // 4
-    return MODEL_PRO if est_tokens > threshold else MODEL_FLASH
-
-
-def resolve_model(args, text=""):
-    if args.model:
-        return args.model
-    if args.flash:
-        return MODEL_FLASH
-    if args.auto:
-        return auto_model(text, args.system)
-    if os.environ.get("DEEPSEEK_MODEL"):
-        return os.environ["DEEPSEEK_MODEL"]
-    return MODEL_PRO
+def resolve_model(args):
+    model = args.model or os.environ.get("OPENROUTER_MODEL")
+    if not model:
+        die("no model — pass -m <slug> or set OPENROUTER_MODEL "
+            "(e.g. openai/gpt-5, anthropic/claude-opus-4, google/gemini-3-pro)", 1)
+    return model
 
 
 def build_prompt(args):
@@ -87,8 +76,8 @@ def main():
     key = os.environ.get("OPENROUTER_API_KEY")
     if not key:
         die("OPENROUTER_API_KEY not set", 1)
+    model = resolve_model(args)
     user = build_prompt(args)
-    model = resolve_model(args, user)
     if args.temperature is None:
         args.temperature = 0.8 if args.consistency else 0.7
     messages = openrouter.build_messages(args.system, user)
@@ -97,7 +86,7 @@ def main():
 
     def sample():
         final, _thinking, usage = openrouter.extract(
-            openrouter.call_api(payload, key, args.timeout, die, "kuli-ask-deepseek"), die)
+            openrouter.call_api(payload, key, args.timeout, die, "kuli-ask-or"), die)
         return final, usage
 
     n = args.consistency
@@ -106,7 +95,7 @@ def main():
         usage = openrouter.sum_usage(usages)
     else:
         content, thinking, usage = openrouter.extract(
-            openrouter.call_api(payload, key, args.timeout, die, "kuli-ask-deepseek"), die)
+            openrouter.call_api(payload, key, args.timeout, die, "kuli-ask-or"), die)
         votes = None
         if args.show_thinking and thinking:
             print(f"<thinking>\n{thinking}\n</thinking>\n")

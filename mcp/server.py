@@ -105,6 +105,67 @@ def ask_deepseek_batch(
     return _run(cmd, stdin="\n".join(prompts) + "\n")
 
 
+# --- or: generic OpenRouter intern (any model) ------------------------------
+
+@mcp.tool()
+def ask_or(
+    prompt: str,
+    model: str = "",
+    reasoning: str = "",
+    system: str = "",
+    consistency: int = 0,
+    context_file: str = "",
+    max_tokens: int = 0,
+) -> str:
+    """Call ANY OpenRouter model — you pick the slug.
+
+    model: REQUIRED OpenRouter slug (e.g. 'openai/gpt-5', 'anthropic/claude-
+    opus-4', 'google/gemini-3-pro') or set OPENROUTER_MODEL env; no silent
+    default. reasoning: '' | 'high' | 'xhigh'. consistency: N>1 votes (short
+    answers). context_file: absolute path bundled as cached prefix.
+    """
+    cmd = [_cli("ask-or")]
+    if model:
+        cmd += ["-m", model]
+    if reasoning:
+        cmd += ["-r", reasoning]
+    if system:
+        cmd += ["-s", system]
+    if context_file:
+        cmd += ["-f", context_file]
+    if consistency and consistency > 1:
+        cmd += ["-c", str(consistency)]
+    if max_tokens:
+        cmd += ["--max-tokens", str(max_tokens)]
+    cmd.append(prompt)
+    return _run(cmd)
+
+
+@mcp.tool()
+def ask_or_batch(
+    prompts: list[str],
+    model: str = "",
+    reasoning: str = "",
+    system: str = "",
+    context_file: str = "",
+    jobs: int = 4,
+) -> str:
+    """Fan out many prompts to one OpenRouter model in parallel.
+
+    Returns JSON array of {index, prompt, output, ok}.
+    """
+    cmd = [_cli("ask-or-batch"), "--json", "-j", str(jobs)]
+    if model:
+        cmd += ["-m", model]
+    if reasoning:
+        cmd += ["-r", reasoning]
+    if system:
+        cmd += ["-s", system]
+    if context_file:
+        cmd += ["-c", context_file]
+    return _run(cmd, stdin="\n".join(prompts) + "\n")
+
+
 # --- gemini: vision intern --------------------------------------------------
 
 @mcp.tool()

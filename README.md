@@ -8,6 +8,7 @@ CLI vocabulary and one optional MCP server:
 | Intern | CLI | Niche | Backend |
 |--------|-----|-------|---------|
 | **deepseek** | `ask-deepseek` | cheap text / bulk reasoning | OpenRouter (DeepSeek V4) |
+| **or** | `ask-or` | any model — you pick the slug | OpenRouter (any model) |
 | **gemini** | `ask-gemini` | vision — sees images & video | Gemini CLI (gemini-3.1-pro) |
 | **codex** | `ask-codex` | agentic coding — Q&A or file edits | OpenAI Codex (`codex exec`) |
 
@@ -70,6 +71,24 @@ printf 'tldr A\ntldr B\n' | ask-deepseek-batch --flash -j 8
 
 Flags: `--flash` / `--auto` / `-m`, `-r [high|xhigh]`, `-s SYSTEM`, `-f FILE`,
 `-c N`, `--json`, `--show-thinking`, `--timeout`, `-q`.
+
+### or — any OpenRouter model
+
+`ask-or` is the model-agnostic sibling of `ask-deepseek` (same OpenRouter
+plumbing). Model is **required** — `-m SLUG` or `OPENROUTER_MODEL` env, no silent
+default.
+
+```bash
+ask-or -m openai/gpt-5 "review this API design tradeoff: ..."
+ask-or -m anthropic/claude-opus-4 -f spec.md "poke holes in this plan"
+ask-or -m qwen/qwen3-max "rewrite formally: ..."     # cheap open model
+export OPENROUTER_MODEL=openai/gpt-5 && ask-or "quick question"
+printf 'tldr A\ntldr B\n' | ask-or-batch -m qwen/qwen3-max -j 8
+```
+
+Flags mirror `ask-deepseek` (`-s`, `-f`, `-r`, `-c N`, `--json`, `--timeout`,
+`-q`) but with no model preset. Use `/deepseek` for the cheap DeepSeek default;
+reach for `ask-or` when you want a specific model or to compare families.
 
 ### gemini — vision
 
