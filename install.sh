@@ -11,6 +11,8 @@ mkdir -p "$CLAUDE_DIR/bin" "$CLAUDE_DIR/skills/deepseek"
 
 install -m 0755 "$SRC/bin/ask-deepseek.py" "$CLAUDE_DIR/bin/ask-deepseek.py"
 ln -sf "$CLAUDE_DIR/bin/ask-deepseek.py" "$CLAUDE_DIR/bin/ask-deepseek"
+install -m 0755 "$SRC/bin/ask-deepseek-batch.py" "$CLAUDE_DIR/bin/ask-deepseek-batch.py"
+ln -sf "$CLAUDE_DIR/bin/ask-deepseek-batch.py" "$CLAUDE_DIR/bin/ask-deepseek-batch"
 install -m 0644 "$SRC/skills/deepseek/SKILL.md" "$CLAUDE_DIR/skills/deepseek/SKILL.md"
 
 # Wire PATH into the user's shell rc (bash + zsh), once.

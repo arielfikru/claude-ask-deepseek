@@ -28,9 +28,29 @@ ask-deepseek --flash "rewrite this sentence formally: ..."
 ask-deepseek -s "You are a data extractor" --json "return {name,email} from: ..."
 ```
 
-Flags: `--flash` (v4-flash, cheap), `-m SLUG`, `-s SYSTEM`, `-f FILE`, `-t TEMP`,
-`--max-tokens N`, `--json`, `-q` (no usage stats). Models:
-`deepseek/deepseek-v4-pro` (default), `deepseek/deepseek-v4-flash`.
+Flags: `--flash` (v4-flash, cheap), `--auto` (route by input size: small→flash,
+large→pro; threshold `DEEPSEEK_AUTO_THRESHOLD` tokens, default 1500), `-m SLUG`,
+`-s SYSTEM`, `-f FILE`, `-t TEMP`, `--max-tokens N`, `--json`, `-q` (no stats).
+Models: `deepseek/deepseek-v4-pro` (default), `deepseek/deepseek-v4-flash`.
+
+### Batch fan-out
+
+`ask-deepseek-batch` sends many prompts in parallel, reusing one cached prefix:
+
+```bash
+# one prompt per line on stdin
+printf 'tldr A\ntldr B\ntldr C\n' | ask-deepseek-batch --flash -j 8
+
+# shared context file -> cached after first call; --auto routes each
+ask-deepseek-batch -c report.md --auto < questions.txt
+
+# multiline prompts split on a delimiter line; JSON output
+ask-deepseek-batch -d '---' --json < prompts.txt > out.json
+```
+
+Batch flags: `-s SYSTEM`, `-c CONTEXT_FILE`, `-d DELIM`, `-j N` (workers, def 4),
+`--flash`, `--auto`, `-m`, `-t`, `--max-tokens`, `--json`. Use it for fan-out over
+a big document — keep `-s`/`-c` identical so the shared prefix is cached.
 
 ## When to delegate (offload to DeepSeek)
 

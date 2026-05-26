@@ -42,6 +42,7 @@ ask-deepseek "summarize the tradeoffs of WAL vs rollback journaling"
 cat report.md | ask-deepseek "extract every action item as a bullet"
 ask-deepseek -f src/big.py "list every public function and its purpose"
 ask-deepseek --flash "cheap quick task"               # v4-flash instead of v4-pro
+ask-deepseek --auto "route me by size"                # small->flash, large->pro
 ask-deepseek -s "You are a data extractor" --json "return {name,email} from: ..."
 ```
 
@@ -58,6 +59,42 @@ ask-deepseek -s "You are a data extractor" --json "return {name,email} from: ...
 
 Models: `deepseek/deepseek-v4-pro` (default), `deepseek/deepseek-v4-flash`.
 Override the default via `DEEPSEEK_MODEL` env var.
+
+## Auto-routing
+
+`--auto` picks the model by estimated input size: small/simple prompts go to
+`flash` (cheap), large ones to `pro` (capable). Threshold is `1500` estimated
+tokens, override via `DEEPSEEK_AUTO_THRESHOLD`.
+
+```bash
+ask-deepseek --auto "Say hi"            # -> v4-flash
+ask-deepseek --auto -f huge_doc.md "analyze"   # -> v4-pro
+```
+
+## Batch fan-out
+
+`ask-deepseek-batch` runs many prompts in parallel, reusing one cached prefix
+(shared `--system`/`--context`), so cost drops after the first call.
+
+```bash
+# one prompt per line on stdin
+printf 'tldr A\ntldr B\ntldr C\n' | ask-deepseek-batch --flash -j 8
+
+# shared context file (cached), auto-route each question
+ask-deepseek-batch -c report.md --auto < questions.txt
+
+# multiline prompts split on a delimiter line, JSON output
+ask-deepseek-batch -d '---' --json < prompts.txt > out.json
+```
+
+| Flag | Meaning |
+| ---- | ------- |
+| `-s TEXT` | shared system prompt (cached prefix) |
+| `-c FILE` | shared context file (cached prefix) |
+| `-d STR` | split prompts on this delimiter line (default: one per line) |
+| `-j N` | parallel workers (default 4) |
+| `--flash` / `--auto` / `-m` / `-t` / `--max-tokens` | applied to every prompt |
+| `--json` | emit a JSON array of `{index, prompt, output, ok}` |
 
 ## Caching
 

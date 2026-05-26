@@ -38,6 +38,8 @@ def parse_args():
     p.add_argument("--system", "-s", help="system prompt")
     p.add_argument("--model", "-m", help="explicit OpenRouter model slug")
     p.add_argument("--flash", action="store_true", help="use cheaper v4-flash")
+    p.add_argument("--auto", action="store_true",
+                   help="auto-pick flash (small input) vs pro (large), by token estimate")
     p.add_argument("--temperature", "-t", type=float, default=0.7)
     p.add_argument("--max-tokens", type=int, default=4096)
     p.add_argument("--json", action="store_true", help="request JSON object output")
@@ -45,12 +47,23 @@ def parse_args():
     return p.parse_args()
 
 
-def resolve_model(args):
+def auto_model(text, system):
+    """Heuristic: small/simple input -> cheap flash, large -> capable pro."""
+    threshold = int(os.environ.get("DEEPSEEK_AUTO_THRESHOLD", "1500"))
+    est_tokens = (len(text) + len(system or "")) // 4
+    return MODEL_PRO if est_tokens > threshold else MODEL_FLASH
+
+
+def resolve_model(args, text=""):
     if args.model:
         return args.model
+    if args.flash:
+        return MODEL_FLASH
+    if args.auto:
+        return auto_model(text, args.system)
     if os.environ.get("DEEPSEEK_MODEL"):
         return os.environ["DEEPSEEK_MODEL"]
-    return MODEL_FLASH if args.flash else MODEL_PRO
+    return MODEL_PRO
 
 
 def build_prompt(args):
@@ -138,8 +151,8 @@ def main():
     key = os.environ.get("OPENROUTER_API_KEY")
     if not key:
         die("OPENROUTER_API_KEY not set", 1)
-    model = resolve_model(args)
     user = build_prompt(args)
+    model = resolve_model(args, user)
     payload = build_payload(args, model, build_messages(args.system, user))
     content, usage = extract(call_api(payload, key))
     print(content)
