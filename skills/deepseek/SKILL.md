@@ -61,7 +61,9 @@ hard reasoning, costs more output tokens), `-m SLUG`, `-s SYSTEM`, `-f FILE`,
 `--consistency/-c N` (automatic review gate: sample N, majority-vote the answer,
 print `agreement X/N` + `⚠ LOW` when no majority — best for short/factual/numeric
 answers, not long prose), `-t TEMP`, `--max-tokens N` (output cap, default 262144,
-env `DEEPSEEK_MAX_TOKENS`), `--json`, `-q` (no stats). Models:
+env `DEEPSEEK_MAX_TOKENS`), `--show-thinking` (print the reasoning process too,
+not just the final answer — off by default), `--timeout SEC` (default 600, env
+`DEEPSEEK_TIMEOUT`; raise for long `xhigh` runs), `--json`, `-q` (no stats). Models:
 `deepseek/deepseek-v4-pro` (default), `deepseek/deepseek-v4-flash`. Context
 window is 1M tokens (input) — feed big files via `-f`; output is capped by
 `--max-tokens`, not 1M.

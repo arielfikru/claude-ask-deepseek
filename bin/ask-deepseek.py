@@ -52,6 +52,11 @@ def parse_args():
                    choices=["high", "xhigh"],
                    help="enable thinking mode (effort high|xhigh; bare = high)")
     p.add_argument("--json", action="store_true", help="request JSON object output")
+    p.add_argument("--show-thinking", action="store_true",
+                   help="also print the reasoning/thinking process, not just the final answer")
+    p.add_argument("--timeout", type=int,
+                   default=int(os.environ.get("DEEPSEEK_TIMEOUT", "600")),
+                   help="HTTP timeout seconds (default 600, env DEEPSEEK_TIMEOUT)")
     p.add_argument("--quiet", "-q", action="store_true", help="suppress usage stats on stderr")
     return p.parse_args()
 
@@ -116,7 +121,7 @@ def build_payload(args, model, messages):
     return payload
 
 
-def call_api(payload, key):
+def call_api(payload, key, timeout=600):
     req = urllib.request.Request(
         API_URL,
         data=json.dumps(payload).encode("utf-8"),
@@ -129,23 +134,27 @@ def call_api(payload, key):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=300) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         die(f"HTTP {e.code}: {e.read().decode('utf-8', 'replace')}", 2)
+    except TimeoutError:
+        die(f"timed out after {timeout}s — raise --timeout or lower --reasoning effort", 2)
     except urllib.error.URLError as e:
         die(f"network error: {e.reason}", 2)
 
 
 def extract(data):
+    """Return (final_answer, thinking, usage). thinking may be empty."""
     try:
         msg = data["choices"][0]["message"]
     except (KeyError, IndexError):
         die(f"unexpected response: {json.dumps(data)[:500]}", 2)
-    content = msg.get("content") or msg.get("reasoning") or msg.get("reasoning_content")
-    if not content:
+    thinking = msg.get("reasoning") or msg.get("reasoning_content") or ""
+    final = msg.get("content") or thinking
+    if not final:
         die(f"empty content: {json.dumps(data)[:500]}", 2)
-    return content, data.get("usage", {})
+    return final, thinking, data.get("usage", {})
 
 
 def format_usage(model, usage):
@@ -175,9 +184,10 @@ def sum_usage(usages):
     return dict(total)
 
 
-def run_consistency(payload, key, n):
+def run_consistency(payload, key, n, timeout=600):
     def one(_):
-        return extract(call_api(payload, key))
+        final, _think, usage = extract(call_api(payload, key, timeout))
+        return final, usage
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(n, 8)) as pool:
         results = list(pool.map(one, range(n)))
     contents = [c for c, _ in results]
@@ -199,10 +209,12 @@ def main():
     payload = build_payload(args, model, build_messages(args.system, user))
     n = args.consistency
     if n and n > 1:
-        content, votes, usage = run_consistency(payload, key, n)
+        content, votes, usage = run_consistency(payload, key, n, args.timeout)
     else:
-        content, usage = extract(call_api(payload, key))
+        content, thinking, usage = extract(call_api(payload, key, args.timeout))
         votes = None
+        if args.show_thinking and thinking:
+            print(f"<thinking>\n{thinking}\n</thinking>\n")
     print(content)
     if not args.quiet:
         line = format_usage(model, usage) if usage else ""

@@ -25,12 +25,31 @@ The agent reads [`INSTALL.md`](INSTALL.md) and sets itself up. That's it.
 
 ### Manual install
 
+> **No `npm install` / `pip install` needed.** The CLI is a single stdlib-Python
+> script (Python 3.8+, zero dependencies). `install.sh` just copies it into
+> `~/.claude/bin` and adds that to your PATH. The only optional dependency is the
+> `mcp` package, and only if you want the [MCP server](#mcp-server-optional).
+
 ```bash
 git clone --depth 1 https://github.com/arielfikru/claude-use-deepseek.git
 bash claude-use-deepseek/install.sh
-export OPENROUTER_API_KEY="sk-or-..."   # get one at https://openrouter.ai/keys
+export OPENROUTER_API_KEY="sk-or-..."   # see "Getting an API key" below
 ask-deepseek --flash "Reply with exactly: PONG"
 ```
+
+### Getting an API key
+
+The intern runs on [OpenRouter](https://openrouter.ai), which proxies DeepSeek V4
+(so you get caching + reasoning + a single key for many models).
+
+1. Sign up at <https://openrouter.ai>.
+2. Open <https://openrouter.ai/keys> and **Create Key**. Optionally set a credit
+   limit on the key (recommended — caps your spend).
+3. Add a few dollars of credit (DeepSeek V4 is cheap; see [cost](#cost--rate-limits--timeouts)).
+4. Export it: `export OPENROUTER_API_KEY="sk-or-..."` — persist it by uncommenting
+   the line `install.sh` added to your `~/.bashrc`.
+
+You do **not** need a key from DeepSeek directly; OpenRouter handles the upstream.
 
 ## What gets installed
 
@@ -49,14 +68,41 @@ ask-deepseek -f src/big.py "list every public function and its purpose"
 ask-deepseek --flash "cheap quick task"               # v4-flash instead of v4-pro
 ask-deepseek --auto "route me by size"                # small->flash, large->pro
 ask-deepseek -r high "tricky logic/math problem"      # thinking mode (or -r xhigh)
+ask-deepseek -r high --show-thinking "..."            # also print the reasoning
 ask-deepseek -s "You are a data extractor" --json "return {name,email} from: ..."
 ```
+
+### What it looks like
+
+```console
+$ ask-deepseek --flash "Reply with exactly: PONG"
+PONG
+[deepseek/deepseek-v4-flash | in 10 out 3 tok]
+
+$ ask-deepseek --flash -c 5 "Capital of Australia? Reply ONLY the city."
+Canberra
+[deepseek/deepseek-v4-flash | in 75 out 125 tok | agreement 5/5]
+
+$ ask-deepseek --flash -r high --show-thinking "What is 17*23? Reply ONLY the number."
+<thinking>
+We compute 17*23 = 391. Reply with only 391.
+</thinking>
+
+391
+[deepseek/deepseek-v4-flash | in 23 out 412 tok]
+```
+
+> The stats line (model, token in/out, cache hits, vote agreement) is printed on
+> **stderr**, so piping `ask-deepseek ... | next-tool` passes only the clean
+> answer. Want to record a GIF for your fork? `vhs` or `asciinema` work well.
 
 | Flag | Meaning |
 | ---- | ------- |
 | `--flash` | use `deepseek/deepseek-v4-flash` (cheaper) instead of `-pro` |
 | `--reasoning`, `-r [high\|xhigh]` | enable thinking mode (bare = high) — big accuracy gain on hard reasoning |
 | `--consistency`, `-c N` | self-consistency: sample N, majority-vote, report agreement + flag disagreement |
+| `--show-thinking` | also print the reasoning process (off by default — final answer only) |
+| `--timeout SEC` | HTTP timeout, default 600 (env `DEEPSEEK_TIMEOUT`) — raise for long `xhigh` runs |
 | `-m SLUG` | explicit OpenRouter model slug |
 | `-s TEXT` | system prompt |
 | `-f FILE` | prepend file contents to the prompt |
@@ -97,6 +143,35 @@ tokens (the thinking is billed), so use it only when a task genuinely needs it.
 ask-deepseek -r high  "Find ordered pairs (a,b), a+b=1000, no digit 0."   # -> 738
 ask-deepseek -r xhigh -f spec.md "review this design for race conditions"
 ```
+
+By default only the **final answer** prints; add `--show-thinking` to also see the
+reasoning (wrapped in `<thinking>…</thinking>`). The thinking is generated and
+**billed** either way — the flag only controls whether it's displayed.
+
+## Cost, rate limits & timeouts
+
+**Reasoning makes output long.** With `--reasoning`, the model emits a long
+internal thinking process before the answer, and **every thinking token is billed
+as output**. In testing, one hard problem with `-r high` produced ~14k output
+tokens (and `--consistency N` multiplies that by N). A normal non-reasoning call is
+tiny by comparison. So:
+
+- **Estimate before you fan out.** The stderr stats line shows `out N tok` per
+  call — reasoning: assume thousands; non-reasoning: tens to hundreds.
+  `--consistency N` and `ask-deepseek-batch` multiply cost by N; start with
+  `--flash` and small N.
+- **Cap spend at the source.** Set a credit limit on the OpenRouter key, and use
+  `--max-tokens` (or `DEEPSEEK_MAX_TOKENS`) to hard-ceiling output per call.
+- **Caching cuts repeat cost** — re-use the same `-s`/`-f` prefix (~0.25x, see
+  [Caching](#caching)).
+- **Default to the cheap intern** — `--flash`/`--auto`; reserve `-pro` + `-r xhigh`
+  for genuinely hard work.
+
+**Timeouts.** Long `xhigh` runs take a while. The CLI waits up to **600s** by
+default; raise with `--timeout 900` or `DEEPSEEK_TIMEOUT`. On timeout you get a
+clear error (`timed out after Ns — raise --timeout or lower --reasoning effort`),
+not a hang. OpenRouter **rate limits** (HTTP 429) surface verbatim on stderr —
+lower concurrency (`-j` in batch) or retry.
 
 ## Self-consistency (automatic review gate)
 
