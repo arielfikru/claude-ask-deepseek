@@ -220,6 +220,25 @@ def ask_gemini_batch(
     return _run(cmd, stdin="\n".join(prompts) + "\n")
 
 
+# --- recraft: SVG vector image generation -----------------------------------
+
+@mcp.tool()
+def ask_recraft(prompt: str, out: str = "", image: str = "") -> str:
+    """Generate an SVG vector graphic (Recraft V4.1 Vector via OpenRouter).
+
+    Writes an .svg file and returns its absolute path. out: output path
+    (default auto-named in cwd). image: optional single input image to guide
+    the result. For icons/logos/illustrations — designed, not photographed.
+    """
+    cmd = [_cli("ask-recraft")]
+    if out:
+        cmd += ["-o", out]
+    if image:
+        cmd += ["-i", image]
+    cmd.append(prompt)
+    return _run(cmd)
+
+
 # --- codex: agentic coding intern -------------------------------------------
 
 @mcp.tool()

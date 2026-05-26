@@ -168,6 +168,184 @@ if __name__ == "__main__":
     main()
 '''
 
+ADAPTER_PERSONA = '''"""kuli.__NAME__ — __DESC__
+
+A persona intern: a fixed OpenRouter model + baked-in system prompt, so the job
+is set once here instead of per call. Same OpenRouter plumbing as ask-or.
+Env: OPENROUTER_API_KEY (required).
+Exit codes: 0 ok, 1 usage/input error, 2 API error.
+"""
+import argparse
+import os
+
+from . import core, openrouter
+
+PROG = "ask-__NAME__"
+MODEL = "__MODEL__"
+SYSTEM = "__SYSTEM__"
+die = core.make_die(PROG)
+
+
+def parse_args():
+    p = argparse.ArgumentParser(prog=PROG, description="__DESC__")
+    p.add_argument("prompt", nargs="*", help="prompt text (else read stdin)")
+    p.add_argument("--file", "-f", help="prepend file contents to prompt")
+    p.add_argument("--consistency", "-c", type=int, metavar="N",
+                   help="self-consistency: sample N, majority-vote")
+    p.add_argument("--temperature", "-t", type=float, default=None)
+    p.add_argument("--max-tokens", type=int, default=262144, help="max output tokens")
+    p.add_argument("--timeout", type=int, default=600, help="HTTP timeout seconds")
+    p.add_argument("--quiet", "-q", action="store_true", help="suppress stats")
+    return p.parse_args()
+
+
+def build_prompt(args):
+    parts = []
+    if args.file:
+        try:
+            with open(args.file, encoding="utf-8") as fh:
+                parts.append(fh.read())
+        except OSError as e:
+            die(f"cannot read --file: {e}", 1)
+    if args.prompt:
+        parts.append(" ".join(args.prompt))
+    else:
+        piped = core.read_stdin()
+        if piped:
+            parts.append(piped)
+    text = "\\n\\n".join(p for p in parts if p.strip())
+    if not text.strip():
+        die("empty prompt (pass args, --file, or pipe stdin)", 1)
+    return text
+
+
+def main():
+    args = parse_args()
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        die("OPENROUTER_API_KEY not set", 1)
+    user = build_prompt(args)
+    if args.temperature is None:
+        args.temperature = 0.9  # persona default; creative leans hot
+    messages = openrouter.build_messages(SYSTEM, user)
+    payload = openrouter.build_payload(MODEL, messages, args.temperature, args.max_tokens)
+
+    def sample():
+        final, _t, usage = openrouter.extract(
+            openrouter.call_api(payload, key, args.timeout, die, PROG), die)
+        return final, usage
+
+    n = args.consistency
+    if n and n > 1:
+        content, votes, usages = core.run_consistency(sample, n)
+        usage = openrouter.sum_usage(usages)
+    else:
+        content, _t, usage = sample()
+        votes = None
+    print(content)
+    core.emit_stats(openrouter.format_usage(MODEL, usage) if usage else "",
+                    votes, n, args.quiet)
+
+
+if __name__ == "__main__":
+    main()
+'''
+
+ADAPTER_IMAGE = r'''"""kuli.__NAME__ — __DESC__
+
+An image-generation intern: a fixed OpenRouter image model. Writes the generated
+image to a file and prints its path (not text to stdout). Optional single input
+image via -i. Env: OPENROUTER_API_KEY.
+Exit codes: 0 ok, 1 usage/input error, 2 API error.
+"""
+import argparse
+import base64
+import os
+import time
+
+from . import core, openrouter
+
+PROG = "ask-__NAME__"
+MODEL = "__MODEL__"
+STYLE = "__SYSTEM__"  # optional style preamble prepended to every prompt
+die = core.make_die(PROG)
+
+EXT = {"image/svg+xml": "svg", "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
+
+
+def parse_args():
+    p = argparse.ArgumentParser(prog=PROG, description="__DESC__")
+    p.add_argument("prompt", nargs="*", help="text prompt (else read stdin)")
+    p.add_argument("--image", "-i", help="optional single input image to guide output")
+    p.add_argument("--out", "-o", help="output file path (default: auto-named in cwd)")
+    p.add_argument("--timeout", type=int, default=600, help="HTTP timeout seconds")
+    p.add_argument("--quiet", "-q", action="store_true", help="suppress stats")
+    return p.parse_args()
+
+
+def build_text(args):
+    parts = [STYLE] if STYLE else []
+    if args.prompt:
+        parts.append(" ".join(args.prompt))
+    else:
+        piped = core.read_stdin()
+        if piped:
+            parts.append(piped)
+    text = " ".join(p for p in parts if p.strip()).strip()
+    if not text:
+        die("empty prompt (pass args or pipe stdin)", 1)
+    return text
+
+
+def build_content(text, image):
+    if not image:
+        return text
+    ap = os.path.abspath(image)
+    if not os.path.exists(ap):
+        die(f"input image not found: {image}", 1)
+    with open(ap, "rb") as fh:
+        b64 = base64.b64encode(fh.read()).decode()
+    return [{"type": "text", "text": text},
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}]
+
+
+def extract_image(data):
+    try:
+        imgs = data["choices"][0]["message"].get("images") or []
+    except (KeyError, IndexError):
+        die(f"unexpected response: {data}", 2)
+    if not imgs:
+        die("no image in response", 2)
+    url = imgs[0].get("image_url", {}).get("url", "")
+    if not url.startswith("data:"):
+        die("response image is not a data URL", 2)
+    header, _, b64 = url.partition(",")
+    mime = header[5:].split(";")[0]
+    return mime, base64.b64decode(b64)
+
+
+def main():
+    args = parse_args()
+    key = os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        die("OPENROUTER_API_KEY not set", 1)
+    text = build_text(args)
+    payload = {"model": MODEL, "modalities": ["image"],
+               "messages": [{"role": "user", "content": build_content(text, args.image)}]}
+    data = openrouter.call_api(payload, key, args.timeout, die, PROG)
+    mime, blob = extract_image(data)
+    out = args.out or f"{PROG}-{int(time.time() * 1000)}-{os.getpid()}.{EXT.get(mime, 'bin')}"
+    with open(out, "wb") as fh:
+        fh.write(blob)
+    print(os.path.abspath(out))
+    usage = data.get("usage", {})
+    core.emit_stats(openrouter.format_usage(MODEL, usage) if usage else "", None, None, args.quiet)
+
+
+if __name__ == "__main__":
+    main()
+'''
+
 BATCH = '''"""kuli.__NAME___batch — fan out many prompts to ask-__NAME__ in parallel.
 
 Prompts: one per line, or split on --delimiter.
@@ -266,22 +444,36 @@ def write(path, text, executable=False):
 def main():
     ap = argparse.ArgumentParser(prog="make-intern", description="Scaffold a new KULI intern.")
     ap.add_argument("name", help="intern name (kebab/lowercase, e.g. grok, mistral, ollama)")
-    ap.add_argument("--shape", required=True, choices=["api", "cli"],
-                    help="api = HTTP backend; cli = subprocess a local CLI")
+    ap.add_argument("--shape", required=True, choices=["api", "cli", "persona", "image"],
+                    help="api = HTTP backend; cli = subprocess a local CLI; "
+                         "persona = fixed OpenRouter chat model + baked-in system prompt; "
+                         "image = fixed OpenRouter image model, writes image files")
     ap.add_argument("--desc", default="TODO one-line description of this intern.",
                     help="skill description (one line)")
+    ap.add_argument("--model", help="OpenRouter slug (required for --shape persona)")
+    ap.add_argument("--system", help="baked-in system prompt (required for --shape persona)")
     args = ap.parse_args()
 
     name = args.name
     if not re.fullmatch(r"[a-z][a-z0-9_-]*", name):
         die("name must be lowercase letters/digits/-/_ and start with a letter")
     mod = name.replace("-", "_")
+    if args.shape == "persona" and not (args.model and args.system):
+        die("--shape persona requires --model and --system")
+    if args.shape == "image" and not args.model:
+        die("--shape image requires --model")
+
+    def esc(s):
+        return (s or "").replace("\\\\", "\\\\\\\\").replace('"', '\\\\"')
 
     def sub(t):
-        return t.replace("__NAME__", name).replace("__MOD__", mod).replace("__DESC__", args.desc)
+        return (t.replace("__NAME__", name).replace("__MOD__", mod)
+                .replace("__DESC__", args.desc)
+                .replace("__MODEL__", args.model or "").replace("__SYSTEM__", esc(args.system)))
 
     print(f"Scaffolding intern '{name}' ({args.shape} shape):")
-    adapter = ADAPTER_API if args.shape == "api" else ADAPTER_CLI
+    adapter = {"api": ADAPTER_API, "cli": ADAPTER_CLI,
+               "persona": ADAPTER_PERSONA, "image": ADAPTER_IMAGE}[args.shape]
     write(REPO / "kuli" / f"{mod}.py", sub(adapter))
     write(REPO / "kuli" / f"{mod}_batch.py", sub(BATCH))
     write(REPO / "bin" / f"ask-{name}", sub(LAUNCHER), executable=True)
@@ -290,14 +482,17 @@ def main():
           .replace(f"ask-{name} ", f"ask-{name}-batch "), executable=True)
     write(REPO / "skills" / name / "SKILL.md", sub(SKILL))
 
-    print(f"""
-Done. Next (manual):
-  1. Fill the `call_backend()` TODO in kuli/{mod}.py
-  2. Flesh out skills/{name}/SKILL.md
-  3. Add '{name}' to the skill loop in install.sh
-  4. (optional) add an ask_{mod} tool to mcp/server.py
-  5. bash install.sh && ask-{name} "test"
-""")
+    steps = []
+    if args.shape in ("api", "cli"):
+        steps.append(f"Fill the `call_backend()` TODO in kuli/{mod}.py")
+    steps += [
+        f"Flesh out skills/{name}/SKILL.md",
+        f"Add '{name}' to the skill loop in install.sh",
+        f"(optional) add an ask_{mod} tool to mcp/server.py",
+        f"bash install.sh && ask-{name} \"test\"",
+    ]
+    body = "\n".join(f"  {i}. {s}" for i, s in enumerate(steps, 1))
+    print(f"\nDone. Next (manual):\n{body}\n")
 
 
 if __name__ == "__main__":
