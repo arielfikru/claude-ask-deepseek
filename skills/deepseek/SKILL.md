@@ -17,7 +17,8 @@ The intern protocol — every delegation follows it:
    bundle the material it needs into `-f FILE` / stdin (file tree, key files, the
    text to transform). A vague brief gets vague work.
 2. **Assign** — pick the right intern for the job:
-   - trivial / bulk / mechanical → `--flash` (cheapest)
+   - trivial / bulk / mechanical → default flash (cheapest, no flag)
+   - hard multi-step reasoning / quality matters → `--pro`
    - sized automatically → `--auto`
    - needs to *think hard* (math, logic, tricky analysis) → `--reasoning` /
      `--reasoning xhigh` (thinking mode; measurably more accurate)
@@ -102,8 +103,9 @@ ask-deepseek --flash -c 5 "Capital of Australia? Reply ONLY the city."
 ask-deepseek -s "You are a data extractor" --json "return {name,email} from: ..."
 ```
 
-Flags: `--flash` (v4-flash, cheap), `--auto` (route by input size: small→flash,
-large→pro; threshold `DEEPSEEK_AUTO_THRESHOLD` tokens, default 1500),
+Flags: `--flash` (v4-flash — the **default**, cheap), `--pro` (v4-pro — stronger,
+pricier; reach for hard multi-step reasoning), `--auto` (route by input size:
+small→flash, large→pro; threshold `DEEPSEEK_AUTO_THRESHOLD` tokens, default 1500),
 `--reasoning/-r [high|xhigh]` (thinking mode — bare = high; big accuracy gain on
 hard reasoning, costs more output tokens), `-m SLUG`, `-s SYSTEM`, `-f FILE`,
 `--consistency/-c N` (automatic review gate: sample N, majority-vote the answer,
@@ -112,7 +114,8 @@ answers, not long prose), `-t TEMP`, `--max-tokens N` (output cap, default 26214
 env `DEEPSEEK_MAX_TOKENS`), `--show-thinking` (print the reasoning process too,
 not just the final answer — off by default), `--timeout SEC` (default 600, env
 `DEEPSEEK_TIMEOUT`; raise for long `xhigh` runs), `--json`, `-q` (no stats). Models:
-`deepseek/deepseek-v4-pro` (default), `deepseek/deepseek-v4-flash`. Context
+`deepseek/deepseek-v4-flash` (default), `deepseek/deepseek-v4-pro` (`--pro`).
+Agentic (`--agentic`) still defaults to pro for harness tool-use; `--flash` opts cheap. Context
 window is 1M tokens (input) — feed big files via `-f`; output is capped by
 `--max-tokens`, not 1M.
 

@@ -26,7 +26,8 @@ def parse_args():
     p.add_argument("--file", "-f", help="prepend file contents to prompt")
     p.add_argument("--system", "-s", help="system prompt")
     p.add_argument("--model", "-m", help="explicit OpenRouter model slug")
-    p.add_argument("--flash", action="store_true", help="use cheaper v4-flash")
+    p.add_argument("--flash", action="store_true", help="use v4-flash (default)")
+    p.add_argument("--pro", action="store_true", help="use v4-pro (stronger, pricier)")
     p.add_argument("--auto", action="store_true",
                    help="auto-pick flash (small input) vs pro (large), by token estimate")
     p.add_argument("--temperature", "-t", type=float, default=None)
@@ -61,13 +62,15 @@ def auto_model(text, system):
 def resolve_model(args, text=""):
     if args.model:
         return args.model
+    if args.pro:
+        return MODEL_PRO
     if args.flash:
         return MODEL_FLASH
     if args.auto:
         return auto_model(text, args.system)
     if os.environ.get("DEEPSEEK_MODEL"):
         return os.environ["DEEPSEEK_MODEL"]
-    return MODEL_PRO
+    return MODEL_FLASH
 
 
 def build_prompt(args):
@@ -97,7 +100,9 @@ def main():
         die("OPENROUTER_API_KEY not set", 1)
     user = build_prompt(args)
     if args.agentic:
-        sys.exit(agentic.run(AGENTIC_MODEL, user, args.apply, args.cd, args.timeout, PROG))
+        # Agentic defaults to pro (stronger tool-use in the harness); --flash to opt cheap.
+        amodel = MODEL_FLASH if args.flash else AGENTIC_MODEL
+        sys.exit(agentic.run(amodel, user, args.apply, args.cd, args.timeout, PROG))
     model = resolve_model(args, user)
     if args.temperature is None:
         args.temperature = 0.8 if args.consistency else 0.7
