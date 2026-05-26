@@ -45,6 +45,24 @@ a shared core. Add more in one command with `scripts/make-intern.py`
 `ask-codex --or-model <slug>` or the shortcuts `ask-deepseek --agentic` /
 `ask-or -m <slug> --agentic` (uses `OPENROUTER_API_KEY`, no ChatGPT login).
 
+## Coding: which lane
+
+Repo coding always goes **agentic** — the lane reads the repo itself, so Claude
+hands only the task + `-C dir`, never file contents. Climb only as far as the
+task needs:
+
+1. **`ask-deepseek --agentic`** — the default coding delegate: simple→medium repo
+   read/edit, cheapest agentic. `--apply` to edit (isolate in a worktree).
+2. **`ask-gemini-code`** — high-volume / parallel / many-file work, a cross-family
+   diff review, or anything that needs vision. Wide fan-out (`-j 8`).
+3. **`ask-codex`** — heaviest precision / long-horizon; one task done right.
+   Serial (`-j 2`, easiest to rate-limit).
+
+**Claude (the senior) codes directly** for new features, novel concepts,
+architecture, or underspecified work — delegation is for *bounded, well-specified*
+tasks. deepseek **text** mode is not a coding lane (it is blind); use it only for
+non-repo text. The `/kuli` skill holds the full routing policy.
+
 ## Install
 
 ```bash
