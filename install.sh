@@ -23,7 +23,7 @@ for f in "$SRC"/bin/*; do
 done
 
 # Skills (one per intern).
-for s in deepseek or gemini codex; do
+for s in deepseek or gemini codex recraft; do
   if [ -f "$SRC/skills/$s/SKILL.md" ]; then
     mkdir -p "$CLAUDE_DIR/skills/$s"
     install -m 0644 "$SRC/skills/$s/SKILL.md" "$CLAUDE_DIR/skills/$s/SKILL.md"
@@ -56,6 +56,7 @@ Done. Interns installed:
   ask-or        (any OpenRouter)   skill: /or
   ask-gemini    (vision)           skill: /gemini
   ask-codex     (coding)           skill: /codex
+  ask-recraft   (SVG vector gen)   skill: /recraft
 plus their -batch variants.
 
 AUTH per intern:
