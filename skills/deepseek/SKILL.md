@@ -3,10 +3,30 @@ name: deepseek
 description: Delegate cheap/bulk subtasks to DeepSeek V4 via OpenRouter instead of doing them inline on Claude. Use for research, summarization, drafting, data extraction, bulk transforms, brainstorming, or any well-scoped task where DeepSeek output is good enough and saves Claude tokens/cost. Trigger when user says "pakai deepseek", "delegate to deepseek", "/deepseek", or when a subtask is mechanical enough to offload. Claude stays the orchestrator and validates output.
 ---
 
-# DeepSeek V4 delegation
+# DeepSeek V4 delegation — the "intern" model
 
-Claude = orchestrator/brain. DeepSeek = cheap worker called via CLI. Claude decides
-what to delegate, calls the tool, then **validates** the result before using it.
+Treat DeepSeek as a **cheap, capable intern working under you (Claude)**. You are
+the senior: you scope the work, hand the intern everything it needs (it has no
+memory of the repo), let it grind, then **review its output before anything ships**.
+You never merge the intern's work blind, and you escalate hard/critical decisions
+to yourself.
+
+The intern protocol — every delegation follows it:
+
+1. **Brief** — state the task precisely. The intern has zero repo context, so
+   bundle the material it needs into `-f FILE` / stdin (file tree, key files, the
+   text to transform). A vague brief gets vague work.
+2. **Assign** — pick the right intern for the job:
+   - trivial / bulk / mechanical → `--flash` (cheapest)
+   - sized automatically → `--auto`
+   - needs to *think hard* (math, logic, tricky analysis) → `--reasoning` /
+     `--reasoning xhigh` (thinking mode; measurably more accurate)
+   - many similar items → `ask-deepseek-batch` (parallel, shared cached prefix)
+3. **Review (mandatory gate)** — read the output, spot-check claims against the
+   real repo/source, correct mistakes. The intern hallucinates and overstates;
+   never paste its result into user-facing work without verifying.
+4. **Integrate** — use the validated result, and say it was an intern draft you
+   reviewed.
 
 ## Tool
 
@@ -24,14 +44,19 @@ ask-deepseek -f src/big.py "list every public function and its purpose"
 # cheaper model for trivial work
 ask-deepseek --flash "rewrite this sentence formally: ..."
 
+# make the intern think hard (thinking mode) for a tricky problem
+ask-deepseek -r high "logic/math problem ..."        # or -r xhigh for max effort
+
 # system prompt + JSON output (machine-parseable)
 ask-deepseek -s "You are a data extractor" --json "return {name,email} from: ..."
 ```
 
 Flags: `--flash` (v4-flash, cheap), `--auto` (route by input size: small→flash,
-large→pro; threshold `DEEPSEEK_AUTO_THRESHOLD` tokens, default 1500), `-m SLUG`,
-`-s SYSTEM`, `-f FILE`, `-t TEMP`, `--max-tokens N` (output cap, default 262144,
-env `DEEPSEEK_MAX_TOKENS`), `--json`, `-q` (no stats). Models:
+large→pro; threshold `DEEPSEEK_AUTO_THRESHOLD` tokens, default 1500),
+`--reasoning/-r [high|xhigh]` (thinking mode — bare = high; big accuracy gain on
+hard reasoning, costs more output tokens), `-m SLUG`, `-s SYSTEM`, `-f FILE`,
+`-t TEMP`, `--max-tokens N` (output cap, default 262144, env
+`DEEPSEEK_MAX_TOKENS`), `--json`, `-q` (no stats). Models:
 `deepseek/deepseek-v4-pro` (default), `deepseek/deepseek-v4-flash`. Context
 window is 1M tokens (input) — feed big files via `-f`; output is capped by
 `--max-tokens`, not 1M.
@@ -63,21 +88,13 @@ a big document — keep `-s`/`-c` identical so the shared prefix is cached.
 - Bulk mechanical transforms (reformat, extract, classify many items)
 - First-pass brainstorming / option generation
 
-## When NOT to delegate (keep on Claude)
+## Escalate to yourself — do NOT hand the intern (keep on Claude)
 
 - Anything needing this repo's structure, tools, or graph context
 - Editing files, running commands, multi-step orchestration
-- Final correctness-critical decisions — Claude reviews DeepSeek output, never
-  pastes it blind
+- Final correctness-critical decisions — you review the intern's output, never
+  ship it blind
 - Security-sensitive reasoning
-
-## Pattern
-
-1. Scope the subtask tightly (DeepSeek has no repo context — give it the text).
-2. Call `ask-deepseek` via Bash, capture output.
-3. Validate / correct, then integrate. Cite that DeepSeek produced the draft.
-
-For batch fan-out, call `ask-deepseek` multiple times in parallel Bash calls.
 
 ## Caching (automatic)
 

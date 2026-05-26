@@ -1,12 +1,17 @@
 # claude-use-deepseek
 
-Give your AI coding agent (Claude Code) a second brain: offload cheap, bulk, or
-well-scoped subtasks to **DeepSeek V4** via [OpenRouter](https://openrouter.ai),
-while the agent stays the orchestrator and validates results.
+Give your AI coding agent (Claude Code) a cheap **intern**: it hands well-scoped
+grunt work to **DeepSeek V4** via [OpenRouter](https://openrouter.ai), then
+reviews the output before anything ships.
 
-The agent keeps full reasoning; DeepSeek does the grunt work (research,
-summarizing, drafting, extraction, classification, brainstorming) at a fraction
-of the cost. OpenRouter prompt caching is automatic (~0.25x for cached tokens).
+**The intern model.** The agent is the senior; DeepSeek is the intern working
+under it: the senior briefs the task and bundles the context (the intern has no
+repo memory), the intern grinds (research, summarizing, drafting, extraction,
+classification, brainstorming) at a fraction of the cost, and the senior
+**reviews and corrects** before using the result — never merges it blind. Hard
+or correctness-critical calls stay with the senior. OpenRouter prompt caching is
+automatic (~0.25x for cached tokens), and the intern can `--reasoning` (thinking
+mode) when a task needs real thought.
 
 ## Install — just tell your agent
 
@@ -43,12 +48,14 @@ cat report.md | ask-deepseek "extract every action item as a bullet"
 ask-deepseek -f src/big.py "list every public function and its purpose"
 ask-deepseek --flash "cheap quick task"               # v4-flash instead of v4-pro
 ask-deepseek --auto "route me by size"                # small->flash, large->pro
+ask-deepseek -r high "tricky logic/math problem"      # thinking mode (or -r xhigh)
 ask-deepseek -s "You are a data extractor" --json "return {name,email} from: ..."
 ```
 
 | Flag | Meaning |
 | ---- | ------- |
 | `--flash` | use `deepseek/deepseek-v4-flash` (cheaper) instead of `-pro` |
+| `--reasoning`, `-r [high\|xhigh]` | enable thinking mode (bare = high) — big accuracy gain on hard reasoning |
 | `-m SLUG` | explicit OpenRouter model slug |
 | `-s TEXT` | system prompt |
 | `-f FILE` | prepend file contents to the prompt |
@@ -78,6 +85,18 @@ ask-deepseek --auto "Say hi"            # -> v4-flash
 ask-deepseek --auto -f huge_doc.md "analyze"   # -> v4-pro
 ```
 
+## Reasoning (thinking mode)
+
+DeepSeek V4 supports a thinking mode that produces internal reasoning before the
+answer — a large, measured accuracy gain on hard math/logic/analysis. Enable it
+with `--reasoning`/`-r` (`high`, or `xhigh` for max effort). It costs more output
+tokens (the thinking is billed), so use it only when a task genuinely needs it.
+
+```bash
+ask-deepseek -r high  "Find ordered pairs (a,b), a+b=1000, no digit 0."   # -> 738
+ask-deepseek -r xhigh -f spec.md "review this design for race conditions"
+```
+
 ## Batch fan-out
 
 `ask-deepseek-batch` runs many prompts in parallel, reusing one cached prefix
@@ -100,7 +119,7 @@ ask-deepseek-batch -d '---' --json < prompts.txt > out.json
 | `-c FILE` | shared context file (cached prefix) |
 | `-d STR` | split prompts on this delimiter line (default: one per line) |
 | `-j N` | parallel workers (default 4) |
-| `--flash` / `--auto` / `-m` / `-t` / `--max-tokens` | applied to every prompt |
+| `--flash` / `--auto` / `-r` / `-m` / `-t` / `--max-tokens` | applied to every prompt |
 | `--json` | emit a JSON array of `{index, prompt, output, ok}` |
 
 ## Caching

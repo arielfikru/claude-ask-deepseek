@@ -31,6 +31,8 @@ def parse_args():
     p.add_argument("--jobs", "-j", type=int, default=4, help="parallel workers (default 4)")
     p.add_argument("--flash", action="store_true", help="use v4-flash for all")
     p.add_argument("--auto", action="store_true", help="auto-route each by size")
+    p.add_argument("--reasoning", "-r", nargs="?", const="high", choices=["high", "xhigh"],
+                   help="enable thinking mode for all (high|xhigh)")
     p.add_argument("--model", "-m", help="explicit model slug for all")
     p.add_argument("--temperature", "-t", type=float)
     p.add_argument("--max-tokens", type=int)
@@ -61,6 +63,8 @@ def shared_flags(args):
         flags.append("--flash")
     if args.auto:
         flags.append("--auto")
+    if args.reasoning:
+        flags += ["-r", args.reasoning]
     if args.model:
         flags += ["-m", args.model]
     if args.temperature is not None:

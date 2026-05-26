@@ -44,6 +44,9 @@ def parse_args():
     p.add_argument("--max-tokens", type=int,
                    default=int(os.environ.get("DEEPSEEK_MAX_TOKENS", "262144")),
                    help="max OUTPUT tokens (default 16384, env DEEPSEEK_MAX_TOKENS)")
+    p.add_argument("--reasoning", "-r", nargs="?", const="high",
+                   choices=["high", "xhigh"],
+                   help="enable thinking mode (effort high|xhigh; bare = high)")
     p.add_argument("--json", action="store_true", help="request JSON object output")
     p.add_argument("--quiet", "-q", action="store_true", help="suppress usage stats on stderr")
     return p.parse_args()
@@ -104,6 +107,8 @@ def build_payload(args, model, messages):
     }
     if args.json:
         payload["response_format"] = {"type": "json_object"}
+    if args.reasoning:
+        payload["reasoning"] = {"effort": args.reasoning}
     return payload
 
 
@@ -130,9 +135,12 @@ def call_api(payload, key):
 
 def extract(data):
     try:
-        content = data["choices"][0]["message"]["content"]
+        msg = data["choices"][0]["message"]
     except (KeyError, IndexError):
         die(f"unexpected response: {json.dumps(data)[:500]}", 2)
+    content = msg.get("content") or msg.get("reasoning") or msg.get("reasoning_content")
+    if not content:
+        die(f"empty content: {json.dumps(data)[:500]}", 2)
     return content, data.get("usage", {})
 
 
