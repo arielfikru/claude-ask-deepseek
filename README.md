@@ -70,7 +70,7 @@ codex login                             # codex     (ChatGPT) — or export OPEN
 ### Smoke test
 
 ```bash
-ask-deepseek --flash 'say PONG'
+ask-deepseek 'say PONG'
 ask-gemini -f screenshot.png 'what UI bug is visible?'
 ask-codex 'reply one word: PONG'
 ```
@@ -80,16 +80,18 @@ ask-codex 'reply one word: PONG'
 ### deepseek — text / bulk
 
 ```bash
-ask-deepseek "summarize WAL vs rollback journaling"
+ask-deepseek "summarize WAL vs rollback journaling"   # v4-flash (default, cheap)
 ask-deepseek -f report.md "extract every action item as a bullet"
-ask-deepseek --flash "rewrite formally: ..."          # cheap model
+ask-deepseek --pro "hard multi-step reasoning"         # stronger v4-pro
 ask-deepseek -r high "tricky logic problem"           # thinking mode
 ask-deepseek -c 5 "Capital of Australia? city only"   # self-consistency vote
-printf 'tldr A\ntldr B\n' | ask-deepseek-batch --flash -j 8
+printf 'tldr A\ntldr B\n' | ask-deepseek-batch -j 8
 ```
 
-Flags: `--flash` / `--auto` / `-m`, `-r [high|xhigh]`, `-s SYSTEM`, `-f FILE`,
-`-c N`, `--json`, `--show-thinking`, `--timeout`, `-q`.
+Flags: `--pro` / `--flash` (default) / `--auto` / `-m`, `-r [high|xhigh]`,
+`-s SYSTEM`, `-f FILE`, `-c N`, `--json`, `--show-thinking`, `--timeout`, `-q`.
+Agentic (`--agentic`) defaults to **pro** for harness tool-use; add `--flash` to
+opt the cheaper model.
 
 ### or — any OpenRouter model
 
